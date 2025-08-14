@@ -1,29 +1,29 @@
+# tests/conftest.py
 import pytest
 import requests
-from pydantic.v1 import BaseModel
+import time
+from config import BASE_URL
+from tests.models import UserData
+from tests.error_messages import ErrorMessages
 
-BASE_URL = "https://stellarburgers.nomoreparties.site/api"
-
-class UserData(BaseModel):
-    email: str
-    password: str
-    name: str
 
 @pytest.fixture
 def base_url():
     return BASE_URL
 
+
 @pytest.fixture
 def random_user():
-    import time
     return UserData(
         email=f"test{int(time.time())}@example.com",
         password="strongPassword123",
         name=f"User{int(time.time())}"
     )
 
+
 @pytest.fixture
 def register_user(base_url, random_user):
+    # Регистрация пользователя
     response = requests.post(
         f"{base_url}/auth/register",
         json={
@@ -32,19 +32,42 @@ def register_user(base_url, random_user):
             "name": random_user.name
         }
     )
-    return response.json(), random_user
+    user_data = response.json()
+    token = user_data.get("accessToken", "")
+
+    yield user_data, random_user
+
+    # Финализатор: удаление пользователя после использования
+    if token:
+        requests.delete(
+            f"{base_url}/auth/user",
+            headers={"Authorization": token}
+        )
+
 
 @pytest.fixture
-def auth_token(base_url, register_user):
-    _, user_data = register_user
-    response = requests.post(
-        f"{base_url}/auth/login",
-        json={
-            "email": user_data.email,
-            "password": user_data.password
-        }
+def auth_token(register_user):
+    user_data, credentials = register_user
+    token = user_data.get("accessToken", "")
+    if not token:
+        # Если токен не получен, авторизуемся
+        response = requests.post(
+            f"{BASE_URL}/auth/login",
+            json={
+                "email": credentials.email,
+                "password": credentials.password
+            }
+        )
+        token = response.json()["accessToken"]
+
+    yield token
+
+    # Финализатор: удаление пользователя
+    requests.delete(
+        f"{BASE_URL}/auth/user",
+        headers={"Authorization": token}
     )
-    return response.json()["accessToken"]
+
 
 @pytest.fixture
 def valid_ingredients(base_url):
