@@ -1,4 +1,3 @@
-# tests/error_messages.py
 class ErrorMessages:
     INGREDIENT_IDS_REQUIRED = "Ingredient ids must be provided"
     USER_ALREADY_EXISTS = "User already exists"
